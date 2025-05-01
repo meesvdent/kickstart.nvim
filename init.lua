@@ -91,7 +91,7 @@ vim.g.mapleader = ' '
 vim.g.maplocalleader = ' '
 
 -- Set to true if you have a Nerd Font installed and selected in the terminal
-vim.g.have_nerd_font = false
+vim.g.have_nerd_font = true
 
 -- [[ Setting options ]]
 -- See `:help vim.opt`
@@ -120,9 +120,12 @@ end)
 
 -- Enable break indent
 vim.opt.breakindent = true
+vim.opt.expandtab = true
 
 -- Save undo history
 vim.opt.undofile = true
+
+vim.cmd 'set iskeyword-=.'
 
 -- set default shiftwidht
 vim.opt.shiftwidth = 4
@@ -176,6 +179,12 @@ vim.keymap.set('n', '<leader>q', vim.diagnostic.setloclist, { desc = 'Open diagn
 -- NOTE: This won't work in all terminal emulators/tmux/etc. Try your own mapping
 -- or just use <C-\><C-n> to exit terminal mode
 vim.keymap.set('t', '<Esc><Esc>', '<C-\\><C-n>', { desc = 'Exit terminal mode' })
+vim.keymap.set('n', '<space>st', function()
+  vim.cmd.vnew()
+  vim.cmd.term()
+  vim.cmd.wincmd 'J'
+  vim.api.nvim_win_set_height(0, 15)
+end)
 
 -- TIP: Disable arrow keys in normal mode
 -- vim.keymap.set('n', '<left>', '<cmd>echo "Use h to move!!"<CR>')
@@ -192,8 +201,12 @@ vim.keymap.set('n', '<C-l>', '<C-w><C-l>', { desc = 'Move focus to the right win
 vim.keymap.set('n', '<C-j>', '<C-w><C-j>', { desc = 'Move focus to the lower window' })
 vim.keymap.set('n', '<C-k>', '<C-w><C-k>', { desc = 'Move focus to the upper window' })
 
-vim.keymap.set({ 'n', 'i' }, '<leader>ai', '<esc>i```{python}<cr>```<esc>O', { desc = '[i]nsert code chunk' })
-vim.keymap.set({ 'n', 'i' }, '<leader>ci', ':split term://ipython<CR><Esc><Esc><C-w><C-k>', { desc = '[c]ode repl [i]python' })
+vim.keymap.set({ 'n' }, '<leader>ai', '<esc>i```{python}<cr>```<esc>O', { desc = '[i]nsert code chunk' })
+vim.keymap.set({ 'n' }, '<leader>ci', ':vsplit term://ipython<CR>a<C-\\><C-N><C-w><C-h>', { desc = '[c]ode repl [i]python' })
+vim.keymap.set({ 'n' }, '<leader>cr', ':vsplit term://R --no-save<CR>a<C-\\><C-N><C-w><C-h>', { desc = '[c]ode repl [i]python' })
+
+vim.keymap.set('n', ']c', '/```{<CR>', { noremap = true, silent = true }, { desc = '[n]ext code block' }) -- Next code block
+vim.keymap.set('n', '[c', '/```<CR>NN', { noremap = true, silent = true }, { desc = 'previouw code block' }) -- Previous code block
 
 -- [[ Basic Autocommands ]]
 --  See `:help lua-guide-autocommands`
@@ -215,6 +228,11 @@ vim.api.nvim_create_autocmd('TermOpen', {
   callback = function()
     vim.wo.number = false
   end,
+})
+
+vim.api.nvim_create_autocmd('FileType', {
+  pattern = { 'qmd', 'markdown' }, -- Apply to Quarto and Markdown files
+  command = 'setlocal expandtab shiftwidth=4 softtabstop=4',
 })
 
 -- [[ Install `lazy.nvim` plugin manager ]]
@@ -268,6 +286,8 @@ require('lazy').setup({
       },
     },
   },
+  -- "gc" to comment visual regions/lines
+  { 'numToStr/Comment.nvim', opts = {} },
 
   -- quarto
   {
@@ -288,27 +308,28 @@ require('lazy').setup({
       vim.g.slime_cell_delimiter = '#\\s\\=%%'
 
       vim.cmd [[
-                function! _EscapeText_quarto(text)
-                      if slime#config#resolve("python_ipython") && len(split(a:text,"\n")) > 1
-                      return ["%cpaste -q\n", slime#config#resolve("dispatch_ipython_pause"), a:text, "--\n"]
-                      else
-                      let empty_lines_pat = '\(^\|\n\)\zs\(\s*\n\+\)\+'
-                      let no_empty_lines = substitute(a:text, empty_lines_pat, "", "g")
-                      let dedent_pat = '\(^\|\n\)\zs'.matchstr(no_empty_lines, '^\s*')
-                      let dedented_lines = substitute(no_empty_lines, dedent_pat, "", "g")
-                      let except_pat = '\(elif\|else\|except\|finally\)\@!'
-                      let add_eol_pat = '\n\s[^\n]\+\n\zs\ze\('.except_pat.'\S\|$\)'
-                      return substitute(dedented_lines, add_eol_pat, "\n", "g")
-                      end
-                      endfunction
-                      ]]
+      function! _EscapeText_quarto(text)
+      if slime#config#resolve("python_ipython") && len(split(a:text,"\n")) > 1
+      return ["%cpaste -q\n", slime#config#resolve("dispatch_ipython_pause"), a:text, "--\n"]
+      else
+      let empty_lines_pat = '\(^\|\n\)\zs\(\s*\n\+\)\+'
+      let no_empty_lines = substitute(a:text, empty_lines_pat, "", "g")
+      let dedent_pat = '\(^\|\n\)\zs'.matchstr(no_empty_lines, '^\s*')
+      let dedented_lines = substitute(no_empty_lines, dedent_pat, "", "g")
+      let except_pat = '\(elif\|else\|except\|finally\)\@!'
+      let add_eol_pat = '\n\s[^\n]\+\n\zs\ze\('.except_pat.'\S\|$\)'
+      return substitute(dedented_lines, add_eol_pat, "\n", "g")
+      end
+      endfunction
+      ]]
     end,
     config = function()
-      vim.keymap.set({ 'n', 'i' }, '<leader>a', function()
+      vim.keymap.set({ 'n' }, '<leader>a', function()
         vim.cmd [[ call slime#send_cell() ]]
       end, { desc = 'send code cell to terminal' })
     end,
   },
+
   -- NOTE: Plugins can also be configured to run Lua code when they are loaded.
   --
   -- This is often very useful to both group configuration, as well as handle
@@ -386,6 +407,20 @@ require('lazy').setup({
   -- you do for a plugin at the top level, you can do for a dependency.
   --
   -- Use the `dependencies` key to specify the dependencies of a particular plugin
+
+  -- {
+  --   'nvim-telescope/telescope-file-browser.nvim',
+  --   dependencies = { 'nvim-telescope/telescope.nvim', 'nvim-lua/plenary.nvim' },
+  -- },
+
+  -- luasnip
+  -- {
+  --   'L3MON4D3/LuaSnip',
+  --   -- follow latest release.
+  --   version = 'v2.*', -- Replace <CurrentMajor> by the latest released major (first number of latest release)
+  --   -- install jsregexp (optional!).
+  --   build = 'make install_jsregexp',
+  -- },
 
   { -- Fuzzy Finder (files, lsp, etc)
     'nvim-telescope/telescope.nvim',
@@ -466,6 +501,22 @@ require('lazy').setup({
       vim.keymap.set('n', '<leader>sr', builtin.resume, { desc = '[S]earch [R]esume' })
       vim.keymap.set('n', '<leader>s.', builtin.oldfiles, { desc = '[S]earch Recent Files ("." for repeat)' })
       vim.keymap.set('n', '<leader><leader>', builtin.buffers, { desc = '[ ] Find existing buffers' })
+
+      -- -- telescope-file-browser
+      vim.keymap.set('n', '<leader>fb', ':Telescope file_browser<CR>')
+      -- -- open file_browser with the path of the current buffer
+      vim.keymap.set('n', '<leader>fb', ':Telescope file_browser path=%:p:h select_buffer=true<CR>')
+
+      -- quarto
+      local runner = require 'quarto.runner'
+      vim.keymap.set('n', '<localleader>rc', runner.run_cell, { desc = 'run cell', silent = true })
+      vim.keymap.set('n', '<localleader>ra', runner.run_above, { desc = 'run cell and above', silent = true })
+      vim.keymap.set('n', '<localleader>rA', runner.run_all, { desc = 'run all cells', silent = true })
+      vim.keymap.set('n', '<localleader>rl', runner.run_line, { desc = 'run line', silent = true })
+      vim.keymap.set('v', '<localleader>r', runner.run_range, { desc = 'run visual range', silent = true })
+      vim.keymap.set('n', '<localleader>RA', function()
+        runner.run_all(true)
+      end, { desc = 'run all cells of all languages', silent = true })
 
       -- Slightly advanced example of overriding default behavior and theme
       vim.keymap.set('n', '<leader>/', function()
@@ -662,6 +713,13 @@ require('lazy').setup({
 
       capabilities.workspace.didChangeWatchedFiles.dynamicRegistration = false
 
+      -- Recognize .smk files
+      vim.filetype.add {
+        extension = {
+          smk = 'snakemake', -- Associates .smk files with the Snakemake filetype
+        },
+      }
+
       -- Enable the following language servers
       --  Feel free to add/remove any LSPs that you want here. They will automatically be installed.
       --
@@ -674,7 +732,8 @@ require('lazy').setup({
       local servers = {
         -- clangd = {},
         -- gopls = {},
-        pyright = {},
+        basedpyright = {},
+        r_language_server = {},
         -- rust_analyzer = {},
         -- ... etc. See `:help lspconfig-all` for a list of all the pre-configured LSPs
         --
@@ -718,6 +777,8 @@ require('lazy').setup({
       require('mason-tool-installer').setup { ensure_installed = ensure_installed }
 
       require('mason-lspconfig').setup {
+        ensure_installed = {}, -- explicitly set to an empty table (Kickstart populates installs via mason-tool-installer)
+        automatic_installation = false,
         handlers = {
           function(server_name)
             local server = servers[server_name] or {}
@@ -767,7 +828,7 @@ require('lazy').setup({
       formatters_by_ft = {
         lua = { 'stylua' },
         -- Conform can also run multiple formatters sequentially
-        -- python = { "isort", "black" },
+        python = { 'isort', 'black' },
         --
         -- You can use 'stop_after_first' to run the first available formatter from the list
         -- javascript = { "prettierd", "prettier", stop_after_first = true },
